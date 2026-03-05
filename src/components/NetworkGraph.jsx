@@ -62,7 +62,7 @@ function buildCoOccurrence(text, concepts) {
 
 // ── Force-directed layout ─────────────────────────────────────────────────────
 // Runs synchronously for N iterations so the graph is stable on first render.
-function runForce(nodes, edges, iterations = 250) {
+function runForce(nodes, edges, maxScore, iterations = 250) {
   const REPULSION   = 3500   // reduced — was pushing nodes to corners
   const ATTRACTION  = 0.06   // stronger pull along edges
   const CENTRE_PULL = 0.04   // stronger gravity to keep cluster centred
@@ -103,18 +103,20 @@ function runForce(nodes, edges, iterations = 250) {
       fx[b] -= dx * strength; fy[b] -= dy * strength
     }
 
-    // Centre pull
+    // Centre pull — heavier nodes pulled more strongly to prevent corner drift
     for (let i = 0; i < nodes.length; i++) {
-      fx[i] += (cx - nodes[i].x) * CENTRE_PULL
-      fy[i] += (cy - nodes[i].y) * CENTRE_PULL
+      const weight = 1 + (nodes[i].score / maxScore) * 2
+      fx[i] += (cx - nodes[i].x) * CENTRE_PULL * weight
+      fy[i] += (cy - nodes[i].y) * CENTRE_PULL * weight
     }
 
     // Integrate with damping
     for (let i = 0; i < nodes.length; i++) {
       vx[i] = (vx[i] + fx[i]) * DAMPING
       vy[i] = (vy[i] + fy[i]) * DAMPING
-      nodes[i].x = Math.max(PADDING, Math.min(W - PADDING, nodes[i].x + vx[i]))
-      nodes[i].y = Math.max(PADDING, Math.min(H - PADDING, nodes[i].y + vy[i]))
+      const nr = 5 + (nodes[i].score / maxScore) * 20 + 8  // node radius + margin
+      nodes[i].x = Math.max(nr, Math.min(W - nr, nodes[i].x + vx[i]))
+      nodes[i].y = Math.max(nr, Math.min(H - nr, nodes[i].y + vy[i]))
     }
   }
 
@@ -198,7 +200,7 @@ export default function NetworkGraph({ comparison, textA = '', textB = '', label
     const dedupedEdges = [...edgeMap.values()].sort((a, b) => b.weight - a.weight).slice(0, 40)
 
     // Run force layout
-    const finalNodes = runForce(seeded, dedupedEdges)
+    const finalNodes = runForce(seeded, dedupedEdges, maxScore)
 
     return { nodes: finalNodes, edges: dedupedEdges, maxScore }
   }, [comparison, textA, textB])
