@@ -1,5 +1,6 @@
 // ── Field Analysis Engine ────────────────────────────────────────────────────
 // Computes E, s, c², I from raw text input.
+// Handles multiple transcript formats including timestamped (MM:SS Speaker:)
 
 // ── Comprehensive stopword list ───────────────────────────────────────────────
 const STOPWORDS = new Set([
@@ -7,12 +8,12 @@ const STOPWORDS = new Set([
   'i','me','my','myself','we','our','ours','ourselves','you','your','yours',
   'yourself','yourselves','he','him','his','himself','she','her','hers',
   'herself','it','its','itself','they','them','their','theirs','themselves',
-  'that','this','these','those','who','whom','which','what',
+  'that','this','these','those','who','whom','which','what','one',
 
   // auxiliary & functional verbs
   'is','are','was','were','be','been','being','have','has','had','having',
   'do','does','did','doing','will','would','shall','should','may','might',
-  'must','can','could','need','dare','ought','used','get','got','getting',
+  'must','can','could','need','dare','ought','get','got','getting',
   'make','made','making','said','say','says','saying','go','goes','went',
   'going','come','came','coming','know','knew','known','think','thought',
   'take','took','taken','see','saw','seen','look','looked','looking',
@@ -35,19 +36,21 @@ const STOPWORDS = new Set([
   'walk','walked','walking','win','won','winning','offer','offered',
   'remember','remembered','love','loved','loving','consider','considered',
   'appear','appeared','appearing','buy','bought','buying','wait','waited',
-  'serve','served','serving','die','died','dying','send','sent','sending',
+  'serve','served','serving','send','sent','sending',
   'expect','expected','expecting','build','built','building','stay','stayed',
   'fall','fell','fallen','cut','cuts','cutting','reach','reached','reaching',
   'remain','remained','remaining','suggest','raise','raised','raising',
   'pass','passed','passing','sell','sold','require','required','requiring',
   'report','reported','reporting','mean','means','meant','work','works',
-  'worked','working','help','helps','helped','helping','need','needs',
-  'needed','want','wants','wanted',
+  'worked','working','help','helps','helped','helping','needs','needed',
+  'want','wants','wanted','put','puts','putting','turn','turns','turned',
+  'start','started','starting','done','take','taking','given','letting',
+  'bring','click','clicks','clicked','open','opens','opening',
 
   // articles & determiners
   'the','a','an','some','any','each','every','all','both','few','more',
   'most','other','such','no','nor','not','only','own','same','so','than',
-  'too','very','just','but','and',
+  'too','very','just','but','and','the',
 
   // prepositions
   'at','by','for','from','in','into','of','off','on','onto','out','over',
@@ -56,7 +59,7 @@ const STOPWORDS = new Set([
   'between','beyond','during','except','inside','near','outside','since',
   'through','throughout','under','until','upon','within','without','down',
   'per','via','versus','amid','amongst','concerning','despite','following',
-  'past','plus','regarding','unlike',
+  'past','plus','regarding','unlike','onto',
 
   // conjunctions & connectors
   'although','because','however','therefore','whether','while','whereas',
@@ -64,8 +67,9 @@ const STOPWORDS = new Set([
   'wherever','yet','nor','either','neither','also','thus','hence',
   'accordingly','consequently','furthermore','moreover','nevertheless',
   'otherwise','meanwhile','instead','still','already','again','else',
+  'then','than',
 
-  // generic nouns (low signal)
+  // generic nouns
   'thing','things','people','person','way','ways','time','times','year',
   'years','day','days','week','weeks','month','months','part','parts',
   'place','places','case','cases','point','points','fact','facts','idea',
@@ -76,7 +80,9 @@ const STOPWORDS = new Set([
   'areas','end','ends','home','homes','room','rooms','face','faces',
   'name','names','head','heads','body','bodies','mind','minds','life',
   'lives','world','worlds','state','states','man','men','woman','women',
-  'child','children','family','families','back','talk','talks',
+  'child','children','family','families','back','talk','talks','stuff',
+  'thing','things','something','anything','everything','nothing',
+  'someone','anyone','everyone','nobody','somebody','anybody',
 
   // conversational fillers
   'yeah','yep','yup','okay','ok','oh','ah','uh','um','hmm','hm','wow',
@@ -85,23 +91,16 @@ const STOPWORDS = new Set([
   'quite','rather','somewhat','anyway','anyways','though','still','already',
   'maybe','perhaps','probably','definitely','certainly','absolutely',
   'exactly','indeed','clearly','simply','course','thanks','thank',
-  'please','sorry','yes',
+  'please','sorry','yes','nope','yep','like','know','mean','sort','kind',
+  'mmm','mhm','uh','hmm','gonna','gotta','wanna','kinda','sorta',
 
-  // contractions (tokenised form)
+  // contractions stripped of apostrophe
   'dont','cant','wont','isnt','arent','wasnt','werent','havent','hasnt',
   'hadnt','wouldnt','couldnt','shouldnt','didnt','doesnt','thats',
-  'theres','heres','lets','ive','ill','id','youve','youll','theyve',
-  'weve','well','hes','shes','its','im','youre','theyre','were',
-])
-
-// ── Common names filter ───────────────────────────────────────────────────────
-const COMMON_NAMES = new Set([
-  'alice','bob','charlie','david','emma','frank','grace','henry','iris',
-  'jack','kate','liam','mary','noah','olivia','peter','quinn','rachel',
-  'sam','sarah','thomas','uma','victor','wendy','xander','yara','zoe',
-  'james','john','jane','mike','michael','anna','lisa','mark','paul',
-  'kirstin','mandy','gerry','perry','carvalho','docherty','stevens',
-  'alice','george','william','richard','helen','susan','karen','betty',
+  'theres','heres','lets','ive','ill','youd','youve','youll','theyd',
+  'theyve','theyll','weve','well','hes','shes','itll','itd',
+  'youre','theyre','were','whats','whos','hows','wheres','whens','whys',
+  'thered','thatd','thatll',
 ])
 
 const JARGON = [
@@ -114,28 +113,118 @@ const JARGON = [
 ]
 
 const MISREAD_MARKERS = [
-  'what do you mean','i don\'t understand','can you clarify','confused',
-  'not sure what you','unclear','please explain','that doesn\'t make sense',
-  'could you rephrase','lost me','what are you saying',
+  "what do you mean","i don't understand","can you clarify","confused",
+  "not sure what you","unclear","please explain","that doesn't make sense",
+  "could you rephrase","lost me","what are you saying",
 ]
 
 // ── Tokenise ──────────────────────────────────────────────────────────────────
 function tokenise(text) {
   return text.toLowerCase()
     .replace(/[\u2018\u2019\u2032]/g, "'")
+    .replace(/https?:\/\/\S+/g, ' ')        // strip URLs
+    .replace(/\d{1,2}:\d{2}(:\d{2})?/g, ' ') // strip timestamps
     .replace(/[^a-z\s'-]/g, ' ')
     .replace(/'\s/g, ' ')
     .replace(/\s'/g, ' ')
+    .replace(/^'+|'+$/g, ' ')
     .split(/\s+/)
     .filter(Boolean)
 }
 
+// ── Detect transcript format & parse turns ────────────────────────────────────
+// Handles:
+//   "00:00 Gerry Docherty: Hello"       ← timestamped (Tactiq, Teams, Zoom)
+//   "Gerry: Hello"                       ← simple label
+//   "[00:00] Gerry: Hello"               ← bracketed timestamp
+//   Plain paragraphs                     ← single voice fallback
+function detectTurns(text) {
+  const lines = text.split('\n')
+  const turns = []
+  let current = null
+
+  // Patterns to try in order
+  const PATTERNS = [
+    // "00:00 Full Name Here: text" or "00:00:00 Full Name: text"
+    /^\d{1,2}:\d{2}(?::\d{2})?\s+([A-Z][A-Za-z\s'-]{1,40}):\s*(.*)$/,
+    // "[00:00] Name: text"
+    /^\[\d{1,2}:\d{2}(?::\d{2})?\]\s*([A-Z][A-Za-z\s'-]{1,40}):\s*(.*)$/,
+    // "Name: text" (simple)
+    /^([A-Z][A-Za-z\s'-]{1,40}):\s*(.*)$/,
+  ]
+
+  for (const raw of lines) {
+    const line = raw.trim()
+
+    // Skip markdown headings, horizontal rules, blank lines, metadata
+    if (!line || line.startsWith('#') || line.startsWith('---') ||
+        line.startsWith('>') || line.startsWith('[View') ||
+        /^(Meeting started|Duration|Participants):/i.test(line)) {
+      if (current && current.text.trim()) {
+        turns.push(current)
+        current = null
+      }
+      continue
+    }
+
+    let matched = false
+    for (const pattern of PATTERNS) {
+      const m = line.match(pattern)
+      if (m) {
+        const speaker = m[1].trim()
+        const text    = m[2].trim()
+        // Validate: speaker name shouldn't be a timestamp or URL
+        if (!/^\d/.test(speaker) && speaker.length > 1) {
+          if (current) turns.push(current)
+          current = { speaker, text }
+          matched = true
+          break
+        }
+      }
+    }
+
+    if (!matched) {
+      if (current) {
+        current.text += ' ' + line
+      } else {
+        current = { speaker: 'Unknown', text: line }
+      }
+    }
+  }
+
+  if (current && current.text.trim()) turns.push(current)
+
+  // Fallback: paragraph splitting
+  if (turns.length === 0 || (turns.length === 1 && turns[0].speaker === 'Unknown')) {
+    const paras = text.split(/\n{2,}/).filter(p => p.trim())
+    if (paras.length > 1) {
+      return paras.map(p => ({ speaker: 'Unknown', text: p.trim() }))
+    }
+  }
+
+  return turns.filter(t => t.text.trim().length > 0)
+}
+
+// ── Extract speaker names for dynamic filtering ───────────────────────────────
+function extractSpeakerTokens(turns) {
+  const tokens = new Set()
+  const unknownLike = new Set(['Unknown', 'Speaker', 'Narrator', 'Host', 'Guest'])
+  for (const t of turns) {
+    if (unknownLike.has(t.speaker)) continue
+    // Add each part of the name (first, last, etc.)
+    for (const part of t.speaker.toLowerCase().split(/\s+/)) {
+      if (part.length >= 2) tokens.add(part)
+    }
+  }
+  return tokens
+}
+
 // ── Is a word meaningful? ─────────────────────────────────────────────────────
-function isMeaningful(word) {
+function isMeaningful(word, speakerTokens = new Set()) {
   return (
     word.length >= 4 &&
     !STOPWORDS.has(word) &&
-    !COMMON_NAMES.has(word) &&
+    !speakerTokens.has(word) &&
     !/^\d/.test(word) &&
     !word.startsWith("'") &&
     !word.endsWith("'s") &&
@@ -148,11 +237,11 @@ function isMeaningful(word) {
 }
 
 // ── Extract n-grams ───────────────────────────────────────────────────────────
-function getNgrams(words, n) {
+function getNgrams(words, n, speakerTokens) {
   const result = []
   for (let i = 0; i <= words.length - n; i++) {
     const gram = words.slice(i, i + n)
-    if (gram.every(w => isMeaningful(w))) {
+    if (gram.every(w => isMeaningful(w, speakerTokens))) {
       result.push(gram.join(' '))
     }
   }
@@ -160,34 +249,32 @@ function getNgrams(words, n) {
 }
 
 // ── Extract weighted concepts ─────────────────────────────────────────────────
-export function extractConcepts(text, topN = 30) {
+export function extractConcepts(text, topN = 30, speakerTokens = new Set()) {
   const words = tokenise(text)
   const scores = {}
 
   // Unigrams — weight 1.0
   for (const w of words) {
-    if (isMeaningful(w)) {
+    if (isMeaningful(w, speakerTokens)) {
       scores[w] = (scores[w] || 0) + 1.0
     }
   }
 
   // Bigrams — weight 1.5×
-  for (const phrase of getNgrams(words, 2)) {
+  for (const phrase of getNgrams(words, 2, speakerTokens)) {
     scores[phrase] = (scores[phrase] || 0) + 1.5
   }
 
   // Trigrams — weight 1.5×
-  for (const phrase of getNgrams(words, 3)) {
+  for (const phrase of getNgrams(words, 3, speakerTokens)) {
     scores[phrase] = (scores[phrase] || 0) + 1.5
   }
 
-  // Suppress unigrams that are dominated by a multi-word phrase
-  const phrases = Object.keys(scores).filter(k => k.includes(' ') && scores[k] >= 3)
+  // Suppress unigrams dominated by a multi-word phrase (score >= 3 = appeared ≥2×)
+  const highScoringPhrases = Object.keys(scores).filter(k => k.includes(' ') && scores[k] >= 3)
   const suppressedUnigrams = new Set()
-  for (const phrase of phrases) {
-    for (const part of phrase.split(' ')) {
-      suppressedUnigrams.add(part)
-    }
+  for (const phrase of highScoringPhrases) {
+    for (const part of phrase.split(' ')) suppressedUnigrams.add(part)
   }
 
   return Object.entries(scores)
@@ -205,39 +292,6 @@ export function extractConcepts(text, topN = 30) {
     }))
 }
 
-// ── Detect turns ──────────────────────────────────────────────────────────────
-function detectTurns(text) {
-  const lines = text.split('\n')
-  const turns = []
-  let current = null
-
-  for (const raw of lines) {
-    const line = raw.trim()
-    if (!line) {
-      if (current && current.text.trim()) { turns.push(current); current = null }
-      continue
-    }
-    const speakerMatch = line.match(/^([A-Z][A-Za-z\s]{0,20}):\s*(.*)$/)
-    if (speakerMatch) {
-      if (current) turns.push(current)
-      current = { speaker: speakerMatch[1].trim(), text: speakerMatch[2] }
-    } else if (current) {
-      current.text += ' ' + line
-    } else {
-      if (!current) current = { speaker: 'Unknown', text: '' }
-      current.text += ' ' + line
-    }
-  }
-  if (current && current.text.trim()) turns.push(current)
-
-  if (turns.length === 0) {
-    return text.split(/\n{2,}/).filter(p => p.trim()).map(p => ({
-      speaker: 'Unknown', text: p.trim(),
-    }))
-  }
-  return turns
-}
-
 // ── Energy (E) ────────────────────────────────────────────────────────────────
 function calcEnergy(words, turns) {
   const volumeRaw = words.length / 5000
@@ -248,7 +302,7 @@ function calcEnergy(words, turns) {
     counts[t.speaker] = (counts[t.speaker] || 0) + tokenise(t.text).length
   }
   const total = Object.values(counts).reduce((a, b) => a + b, 0)
-  const probs = Object.values(counts).map(c => c / total)
+  const probs  = Object.values(counts).map(c => c / total)
   const entropy = -probs.reduce((sum, p) => p > 0 ? sum + p * Math.log2(p) : sum, 0)
   const maxEntropy = probs.length > 1 ? Math.log2(probs.length) : 0
   const equity = maxEntropy > 0 ? entropy / maxEntropy : 1.0
@@ -262,6 +316,7 @@ function calcEnergy(words, turns) {
         {
           label: 'Speaker Distribution',
           detail: Object.entries(counts)
+            .sort((a,b) => b[1]-a[1])
             .map(([k, v]) => `${k}: ${v.toLocaleString()} words (${((v/total)*100).toFixed(1)}%)`)
             .join('  ·  '),
         },
@@ -281,8 +336,8 @@ function calcEnergy(words, turns) {
 }
 
 // ── Symbolic Coherence (s) ────────────────────────────────────────────────────
-function calcCoherence(words, turns) {
-  const meaningful = words.filter(w => isMeaningful(w))
+function calcCoherence(words, turns, speakerTokens) {
+  const meaningful = words.filter(w => isMeaningful(w, speakerTokens))
   const unique = new Set(meaningful)
   const diversityRaw = unique.size / 200
   const diversity = Math.min(diversityRaw, 1)
@@ -386,13 +441,18 @@ function calcImpact(E, s, c) {
 // ── Main entry point ──────────────────────────────────────────────────────────
 export function analyse(text) {
   if (!text || text.trim().length < 20) return null
-  const turns = detectTurns(text)
-  const words = tokenise(text)
+
+  const turns       = detectTurns(text)
+  const words       = tokenise(text)
+  const speakerTokens = extractSpeakerTokens(turns)
+
   const energy     = calcEnergy(words, turns)
-  const coherence  = calcCoherence(words, turns)
+  const coherence  = calcCoherence(words, turns, speakerTokens)
   const connection = calcConnection(words, turns)
   const impact     = calcImpact(energy.value, coherence.value, connection.value)
-  const speakers   = [...new Set(turns.map(t => t.speaker))]
+
+  const speakers = [...new Set(turns.map(t => t.speaker))]
+
   return {
     meta: { wordCount: words.length, turnCount: turns.length, speakers },
     energy, coherence, connection, impact,
@@ -401,8 +461,16 @@ export function analyse(text) {
 
 // ── Comparison ────────────────────────────────────────────────────────────────
 export function compareTexts(textA, textB) {
-  const conceptsA = extractConcepts(textA, 60)
-  const conceptsB = extractConcepts(textB, 60)
+  const turnsA = detectTurns(textA)
+  const turnsB = detectTurns(textB)
+  const speakerTokensA = extractSpeakerTokens(turnsA)
+  const speakerTokensB = extractSpeakerTokens(turnsB)
+
+  // Merge both speaker token sets so shared names don't surface as concepts
+  const allSpeakerTokens = new Set([...speakerTokensA, ...speakerTokensB])
+
+  const conceptsA = extractConcepts(textA, 60, allSpeakerTokens)
+  const conceptsB = extractConcepts(textB, 60, allSpeakerTokens)
 
   const setA = new Map(conceptsA.map(c => [c.word, c.count]))
   const setB = new Map(conceptsB.map(c => [c.word, c.count]))
@@ -421,7 +489,7 @@ export function compareTexts(textA, textB) {
   }
 
   shared.sort((a, b) => (b.countA + b.countB) - (a.countA + a.countB))
-  const overlapPercent = Math.round((shared.length / allTerms.size) * 100)
+  const overlapPercent = Math.round((shared.length / Math.max(allTerms.size, 1)) * 100)
 
   return {
     overlapPercent,
