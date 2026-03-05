@@ -152,7 +152,11 @@ export default function ComparisonTab() {
 
           {/* network sub-tab */}
           {subTab === 'network' && (
-            <NetworkGraph comparison={comparison} labelA={nameA} labelB={nameB} />
+            <NetworkGraph
+              comparison={comparison}
+              textA={textA} textB={textB}
+              labelA={nameA} labelB={nameB}
+            />
           )}
 
           {/* overlap sub-tab */}
