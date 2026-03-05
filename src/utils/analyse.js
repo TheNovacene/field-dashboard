@@ -84,15 +84,32 @@ const STOPWORDS = new Set([
   'thing','things','something','anything','everything','nothing',
   'someone','anyone','everyone','nobody','somebody','anybody',
 
+  // generic adjectives & adverbs
+  'there','here','little','much','able','different','important','interesting',
+  'real','next','last','first','second','third','early','late','long','high',
+  'large','small','big','great','good','best','better','worse','worst',
+  'true','false','free','full','hard','easy','clear','dark','light','old',
+  'new','possible','available','various','specific','general','certain',
+  'special','enough','often','always','never','sometimes','usually',
+  'actually','really','quite','rather','pretty','very','even','almost',
+  'many','much','more','most','less','least','only','also','both','each',
+  'every','another','same','different','other','such','own','whole','several',
+  'able','unable','ready','likely','unlikely','similar','interesting','simple',
+  'complex','common','public','private','local','national','international',
+  'current','previous','following','above','below','between','across',
+  'share','sharing','shared','moment','moments','talking','telling',
+  'saying','showing','using','making','getting','putting','taking',
+  'coming','going','looking','thinking','feeling','trying','working',
+
   // conversational fillers
   'yeah','yep','yup','okay','ok','oh','ah','uh','um','hmm','hm','wow',
-  'well','right','sure','fine','great','nice','good','cool','got','just',
+  'well','right','sure','fine','nice','cool','got','just',
   'really','actually','basically','literally','honestly','totally','pretty',
   'quite','rather','somewhat','anyway','anyways','though','still','already',
   'maybe','perhaps','probably','definitely','certainly','absolutely',
   'exactly','indeed','clearly','simply','course','thanks','thank',
-  'please','sorry','yes','nope','yep','like','know','mean','sort','kind',
-  'mmm','mhm','uh','hmm','gonna','gotta','wanna','kinda','sorta',
+  'please','sorry','yes','nope','like','know','mean','sort','kind',
+  'mmm','mhm','gonna','gotta','wanna','kinda','sorta',
 
   // contractions stripped of apostrophe
   'dont','cant','wont','isnt','arent','wasnt','werent','havent','hasnt',
@@ -270,17 +287,17 @@ export function extractConcepts(text, topN = 30, speakerTokens = new Set()) {
     scores[phrase] = (scores[phrase] || 0) + 1.5
   }
 
-  // Suppress unigrams dominated by a multi-word phrase (score >= 3 = appeared ≥2×)
-  const highScoringPhrases = Object.keys(scores).filter(k => k.includes(' ') && scores[k] >= 3)
+  // Suppress unigrams dominated by any multi-word phrase
+  const allPhrases = Object.keys(scores).filter(k => k.includes(' '))
   const suppressedUnigrams = new Set()
-  for (const phrase of highScoringPhrases) {
+  for (const phrase of allPhrases) {
     for (const part of phrase.split(' ')) suppressedUnigrams.add(part)
   }
 
   return Object.entries(scores)
-    .filter(([term, score]) => {
+    .filter(([term]) => {
+      // Drop unigrams that appear in any phrase
       if (!term.includes(' ') && suppressedUnigrams.has(term)) return false
-      if (term.includes(' ') && score < 3) return false
       return true
     })
     .sort((a, b) => b[1] - a[1])
