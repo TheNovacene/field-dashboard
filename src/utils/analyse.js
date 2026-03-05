@@ -236,11 +236,37 @@ function extractSpeakerTokens(turns) {
   return tokens
 }
 
+// ── Concrete nouns / proper nouns that aren't concepts ───────────────────────
+const CONCRETE_FILTER = new Set([
+  'australia','england','scotland','ireland','london','paris','africa',
+  'europe','america','canada','india','china','japan','germany','france',
+  'texas','california','florida','seattle','boston','chicago',
+  'daughter','father','mother','sister','brother','husband','wife',
+  'friend','friends','teacher','teachers','player','players',
+  'members','neighbour','colleague','partner','partners',
+  'phone','email','message','messages','letter','letters','photo','photos',
+  'house','hospital','office','church','library','hotel',
+  'morning','evening','tonight','today','yesterday','tomorrow','weekend',
+  'monday','tuesday','wednesday','thursday','friday','saturday','sunday',
+  'january','february','march','april','june','july','august','september',
+  'october','november','december',
+  'happening','supposed','wanting','telling','showing',
+  'likes','chat','chats',
+  'anyone','someone','everyone','nobody',
+  'something','anything','everything','nothing','somewhere','anywhere',
+  'student','students','assignment','assignments','camera','relationship',
+  'happened','getting','putting','clicking','opening','looking',
+])
+
 // ── Is a word meaningful? ─────────────────────────────────────────────────────
-function isMeaningful(word, speakerTokens = new Set()) {
+// strict=true for unigrams: requires 6+ chars (raises concept quality bar)
+// strict=false for n-gram parts: 4+ chars (phrases earn quality by combination)
+function isMeaningful(word, speakerTokens = new Set(), strict = false) {
+  const minLen = strict ? 6 : 4
   return (
-    word.length >= 4 &&
+    word.length >= minLen &&
     !STOPWORDS.has(word) &&
+    !CONCRETE_FILTER.has(word) &&
     !speakerTokens.has(word) &&
     !/^\d/.test(word) &&
     !word.startsWith("'") &&
@@ -270,24 +296,28 @@ export function extractConcepts(text, topN = 30, speakerTokens = new Set()) {
   const words = tokenise(text)
   const scores = {}
 
-  // Unigrams — weight 1.0
+  // Unigrams — strict mode: 6+ chars, must appear 2+ times to qualify
+  const unigramCounts = {}
   for (const w of words) {
-    if (isMeaningful(w, speakerTokens)) {
-      scores[w] = (scores[w] || 0) + 1.0
+    if (isMeaningful(w, speakerTokens, true)) {
+      unigramCounts[w] = (unigramCounts[w] || 0) + 1
     }
   }
+  for (const [w, count] of Object.entries(unigramCounts)) {
+    if (count >= 2) scores[w] = count * 1.0
+  }
 
-  // Bigrams — weight 1.5×
+  // Bigrams — weight 1.5×, appear once is enough (phrases earn quality)
   for (const phrase of getNgrams(words, 2, speakerTokens)) {
     scores[phrase] = (scores[phrase] || 0) + 1.5
   }
 
-  // Trigrams — weight 1.5×
+  // Trigrams — weight 2×, highest conceptual charge
   for (const phrase of getNgrams(words, 3, speakerTokens)) {
-    scores[phrase] = (scores[phrase] || 0) + 1.5
+    scores[phrase] = (scores[phrase] || 0) + 2.0
   }
 
-  // Suppress unigrams dominated by any multi-word phrase
+  // Always suppress unigrams that are part of any phrase
   const allPhrases = Object.keys(scores).filter(k => k.includes(' '))
   const suppressedUnigrams = new Set()
   for (const phrase of allPhrases) {
@@ -296,7 +326,6 @@ export function extractConcepts(text, topN = 30, speakerTokens = new Set()) {
 
   return Object.entries(scores)
     .filter(([term]) => {
-      // Drop unigrams that appear in any phrase
       if (!term.includes(' ') && suppressedUnigrams.has(term)) return false
       return true
     })

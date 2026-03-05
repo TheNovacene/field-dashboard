@@ -62,12 +62,12 @@ function buildCoOccurrence(text, concepts) {
 
 // ── Force-directed layout ─────────────────────────────────────────────────────
 // Runs synchronously for N iterations so the graph is stable on first render.
-function runForce(nodes, edges, iterations = 180) {
-  const REPULSION   = 6000
-  const ATTRACTION  = 0.04
-  const CENTRE_PULL = 0.012
-  const DAMPING     = 0.82
-  const MIN_DIST    = 30
+function runForce(nodes, edges, iterations = 250) {
+  const REPULSION   = 3500   // reduced — was pushing nodes to corners
+  const ATTRACTION  = 0.06   // stronger pull along edges
+  const CENTRE_PULL = 0.04   // stronger gravity to keep cluster centred
+  const DAMPING     = 0.75   // more damping = settles faster, less overshooting
+  const MIN_DIST    = 25
 
   const cx = W / 2
   const cy = H / 2
@@ -159,14 +159,17 @@ export default function NetworkGraph({ comparison, textA = '', textB = '', label
     const seeded = allConcepts.map((c, i) => {
       let baseX, baseY
       if (c.type === 'shared') {
-        baseX = W / 2 + (Math.random() - 0.5) * 80
-        baseY = H / 2 + (Math.random() - 0.5) * 80
+        // Shared nodes seed tightly around centre
+        const angle = Math.random() * 2 * Math.PI
+        const r = 40 + Math.random() * 40
+        baseX = W / 2 + r * Math.cos(angle)
+        baseY = H / 2 + r * Math.sin(angle)
       } else if (c.type === 'a') {
-        baseX = W * 0.25 + (Math.random() - 0.5) * 120
-        baseY = H / 2    + (Math.random() - 0.5) * 140
+        baseX = W * 0.28 + (Math.random() - 0.5) * 100
+        baseY = H / 2    + (Math.random() - 0.5) * 120
       } else {
-        baseX = W * 0.75 + (Math.random() - 0.5) * 120
-        baseY = H / 2    + (Math.random() - 0.5) * 140
+        baseX = W * 0.72 + (Math.random() - 0.5) * 100
+        baseY = H / 2    + (Math.random() - 0.5) * 120
       }
       return { ...c, id: i, x: baseX, y: baseY }
     })
