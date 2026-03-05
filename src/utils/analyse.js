@@ -256,6 +256,8 @@ const CONCRETE_FILTER = new Set([
   'something','anything','everything','nothing','somewhere','anywhere',
   'student','students','assignment','assignments','camera','relationship',
   'happened','getting','putting','clicking','opening','looking',
+  'parents','giving','pictures','everybody','together',
+  'spring','magic','schools','talking','wanting','trying','watching','thinking','starting',
 ])
 
 // ── Is a word meaningful? ─────────────────────────────────────────────────────

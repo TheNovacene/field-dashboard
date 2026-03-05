@@ -63,11 +63,11 @@ function buildCoOccurrence(text, concepts) {
 // ── Force-directed layout ─────────────────────────────────────────────────────
 // Runs synchronously for N iterations so the graph is stable on first render.
 function runForce(nodes, edges, maxScore, iterations = 250) {
-  const REPULSION   = 3500   // reduced — was pushing nodes to corners
-  const ATTRACTION  = 0.06   // stronger pull along edges
-  const CENTRE_PULL = 0.04   // stronger gravity to keep cluster centred
-  const DAMPING     = 0.75   // more damping = settles faster, less overshooting
-  const MIN_DIST    = 25
+  const REPULSION   = 2800
+  const ATTRACTION  = 0.008  // gentle — ideal-distance spring, not a magnet
+  const CENTRE_PULL = 0.06   // strong centre gravity
+  const DAMPING     = 0.72
+  const MIN_DIST    = 20
 
   const cx = W / 2
   const cy = H / 2
@@ -93,19 +93,22 @@ function runForce(nodes, edges, maxScore, iterations = 250) {
       }
     }
 
-    // Attraction along edges
+    // Attraction along edges — capped so distant nodes aren't flung apart
+    const IDEAL_DIST = 120  // edges pull toward this distance, not further
     for (const { a, b, weight } of edges) {
       const dx = nodes[b].x - nodes[a].x
       const dy = nodes[b].y - nodes[a].y
       const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1)
-      const strength = ATTRACTION * weight * Math.log(dist + 1)
+      // Only attract if further than ideal; repel slightly if too close
+      const delta = dist - IDEAL_DIST
+      const strength = ATTRACTION * weight * delta / dist
       fx[a] += dx * strength; fy[a] += dy * strength
       fx[b] -= dx * strength; fy[b] -= dy * strength
     }
 
     // Centre pull — heavier nodes pulled more strongly to prevent corner drift
     for (let i = 0; i < nodes.length; i++) {
-      const weight = 1 + (nodes[i].score / maxScore) * 2
+      const weight = 1 + (nodes[i].score / maxScore) * 4
       fx[i] += (cx - nodes[i].x) * CENTRE_PULL * weight
       fy[i] += (cy - nodes[i].y) * CENTRE_PULL * weight
     }
